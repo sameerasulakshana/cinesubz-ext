@@ -1,0 +1,8 @@
+{
+    "name": "CineSubz Repository",
+    "description": "CineSubz.lk - Sinhala subtitled movies & TV shows for Cloudstream",
+    "manifestVersion": 1,
+    "pluginLists": [
+        "https://raw.githubusercontent.com/sameerasulakshana/cinesubz-ext/builds/plugins.json"
+    ]
+}
