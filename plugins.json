@@ -1,0 +1,23 @@
+[
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=cinesubz.net&sz=%size%",
+        "fileHash": "sha256-14225fd6b9a4461f2d3e05205914a00e9c3d42aed782a3d1ffc0646a394ea17c",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/sameerasulakshana/cinesubz-ext",
+        "fileSize": 21849,
+        "status": 1,
+        "language": "si",
+        "authors": [
+            "cinesubz"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 2,
+        "internalName": "CineSubz",
+        "description": "Sinhala subtitled movies and TV shows",
+        "url": "https://raw.githubusercontent.com/sameerasulakshana/cinesubz-ext/builds/CineSubz.cs3",
+        "name": "CineSubz"
+    }
+]
