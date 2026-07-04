@@ -180,7 +180,7 @@ class CineSubzProvider : MainAPI() {
 
     private fun transformVideoUrl(url: String): String {
         if (url.isBlank()) return ""
-        val transformed = url
+        var transformed = url
             .replace("https://google.com/server11/1:/", "https://bot3.sonic-cloud.online/server1/")
             .replace("https://google.com/server12/1:/", "https://bot3.sonic-cloud.online/server1/")
             .replace("https://google.com/server13/1:/", "https://bot3.sonic-cloud.online/server1/")
@@ -191,7 +191,14 @@ class CineSubzProvider : MainAPI() {
             .replace("https://google.com/server4/1:/", "https://bot3.sonic-cloud.online/server4/")
             .replace("https://google.com/server5/1:/", "https://bot3.sonic-cloud.online/server5/")
             .replace("https://google.com/server6/", "https://bot3.sonic-cloud.online/server6/")
-        return if (transformed != url) transformed else ""
+        if (transformed == url) return ""
+        if (transformed.contains(".mp4") && !transformed.contains("?bot=")) {
+            transformed = transformed.replaceFirst(".mp4", "?ext=mp4")
+        }
+        if (transformed.contains(".mkv") && !transformed.contains("?bot=")) {
+            transformed = transformed.replaceFirst(".mkv", "?ext=mkv")
+        }
+        return transformed
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
