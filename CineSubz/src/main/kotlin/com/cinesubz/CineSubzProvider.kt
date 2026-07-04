@@ -26,9 +26,14 @@ class CineSubzProvider : MainAPI() {
         return newHomePageResponse(request.name, items)
     }
 
+    override suspend fun search(query: String): List<SearchResponse> {
+        return search(query, 1) ?: emptyList()
+    }
+
     override suspend fun search(query: String, page: Int): SearchResponseList? {
-        val doc = app.get("$mainUrl/page/$page/?s=$query").document
-        val results = doc.select("div.flw-item, div.module-item, article.item").mapNotNull { it.toSearchResponse() }
+        val searchUrl = if (page <= 1) "$mainUrl/?s=$query" else "$mainUrl/page/$page/?s=$query"
+        val doc = app.get(searchUrl).document
+        val results = doc.select("div.flw-item, div.module-item, article.item, div.film-item").mapNotNull { it.toSearchResponse() }
         return results.toNewSearchResponseList()
     }
 
@@ -176,24 +181,36 @@ class CineSubzProvider : MainAPI() {
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
-        val linkEl = when {
-            tagName() == "a" -> this
-            select("a").isNotEmpty() -> select("a").first()
-            else -> return null
+        var linkA: org.jsoup.nodes.Element? = null
+        var href: String? = null
+        if (tagName() == "a") {
+            linkA = this
+            href = attr("href")
+        } else {
+            linkA = select("a").first()
+            href = linkA?.attr("href")
         }
-        val href = linkEl?.attr("href") ?: return null
-        if (href.isBlank()) return null
+        if (href.isNullOrBlank()) return null
 
         val img = select("img").first()
-        val poster = if (img != null) img.attr("src").ifEmpty { img.attr("data-src") } else ""
-        val title = (img?.attr("alt") ?: select("h2, h3, .title, .name").text().ifEmpty { linkEl.text() }).trim()
-        if (title.isBlank()) return null
+        val poster = if (img != null) {
+            val src = img.attr("src")
+            if (src.isNotBlank()) src else img.attr("data-src")
+        } else ""
 
-        val badge = select(".badge, .quality, .badge-quality").text()
+        var title = linkA?.attr("title") ?: img?.attr("alt") ?: ""
+        if (title.isBlank()) title = select("h2, h3, .title, .film-name, .name").text().trim()
+        if (title.isBlank()) title = linkA?.text()?.trim() ?: ""
+        if (title.isBlank()) return null
+        title = title.replace("| සිංහල උපසිරැසි සමඟ", "").trim()
+
+        val badge = select(".badge, .quality, .badge-quality, .badge-season, .badge-episode").text()
         val isTv = href.contains("/tvshows/") ||
             badge.contains("S0", ignoreCase = true) ||
             badge.contains("Season", ignoreCase = true) ||
-            badge.contains("Complete", ignoreCase = true)
+            badge.contains("Complete", ignoreCase = true) ||
+            badge.contains("TV", ignoreCase = true) ||
+            badge.contains("EP", ignoreCase = true)
 
         return if (isTv) {
             newTvSeriesSearchResponse(title, fixUrl(href), TvType.TvSeries) {
