@@ -27,7 +27,8 @@ class CineSubzProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return search(query, 1) ?: emptyList()
+        val result = search(query, 1)
+        return if (result != null) result else emptyList()
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
