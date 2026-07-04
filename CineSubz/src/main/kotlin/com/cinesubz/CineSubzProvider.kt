@@ -129,30 +129,29 @@ class CineSubzProvider : MainAPI() {
         val resp = app.get(data)
         val doc = resp.document
 
+        val dlBtn = doc.select("a#link").first() ?: doc.select("div.wait-done a").first()
+        if (dlBtn != null) {
+            val rawUrl = dlBtn.attr("href")
+            if (rawUrl.isNotBlank()) {
+                val transformed = transformVideoUrl(rawUrl)
+                if (transformed.isNotBlank()) {
+                    loadExtractor(transformed, subtitleCallback, callback)
+                    return true
+                }
+            }
+        }
+
         val downloadLinks = doc.select("a[href*=/zt-links/], a[href*=/api-]")
         for (link in downloadLinks) {
             val href = link.attr("href")
             if (href.isNotBlank()) {
                 val dlResp = app.get(fixUrl(href))
                 val dlDoc = dlResp.document
-                val dlLinkEl = dlDoc.select("a#link").first() ?: dlDoc.select("div.wait-done a").first() ?: dlDoc.select("a[href*=google.com/server]").first()
-                if (dlLinkEl != null) {
-                    var videoUrl = dlLinkEl.attr("href")
-                    if (videoUrl.isNotBlank()) {
-                        videoUrl = videoUrl
-                            .replace("https://google.com/server11/1:/", "https://bot3.sonic-cloud.online/server1/")
-                            .replace("https://google.com/server12/1:/", "https://bot3.sonic-cloud.online/server1/")
-                            .replace("https://google.com/server13/1:/", "https://bot3.sonic-cloud.online/server1/")
-                            .replace("https://google.com/server21/1:/", "https://bot3.sonic-cloud.online/server2/")
-                            .replace("https://google.com/server22/1:/", "https://bot3.sonic-cloud.online/server2/")
-                            .replace("https://google.com/server23/1:/", "https://bot3.sonic-cloud.online/server2/")
-                            .replace("https://google.com/server3/1:/", "https://bot3.sonic-cloud.online/server3/")
-                            .replace("https://google.com/server4/1:/", "https://bot3.sonic-cloud.online/server4/")
-                            .replace("https://google.com/server5/1:/", "https://bot3.sonic-cloud.online/server5/")
-                            .replace("https://google.com/server6/", "https://bot3.sonic-cloud.online/server6/")
-                        if (videoUrl != dlLinkEl.attr("href")) {
-                            loadExtractor(videoUrl, subtitleCallback, callback)
-                        }
+                val dlEl = dlDoc.select("a#link").first() ?: dlDoc.select("div.wait-done a").first()
+                if (dlEl != null) {
+                    val transformed = transformVideoUrl(dlEl.attr("href"))
+                    if (transformed.isNotBlank()) {
+                        loadExtractor(transformed, subtitleCallback, callback)
                     }
                 }
             }
@@ -177,6 +176,22 @@ class CineSubzProvider : MainAPI() {
         }
 
         return true
+    }
+
+    private fun transformVideoUrl(url: String): String {
+        if (url.isBlank()) return ""
+        val transformed = url
+            .replace("https://google.com/server11/1:/", "https://bot3.sonic-cloud.online/server1/")
+            .replace("https://google.com/server12/1:/", "https://bot3.sonic-cloud.online/server1/")
+            .replace("https://google.com/server13/1:/", "https://bot3.sonic-cloud.online/server1/")
+            .replace("https://google.com/server21/1:/", "https://bot3.sonic-cloud.online/server2/")
+            .replace("https://google.com/server22/1:/", "https://bot3.sonic-cloud.online/server2/")
+            .replace("https://google.com/server23/1:/", "https://bot3.sonic-cloud.online/server2/")
+            .replace("https://google.com/server3/1:/", "https://bot3.sonic-cloud.online/server3/")
+            .replace("https://google.com/server4/1:/", "https://bot3.sonic-cloud.online/server4/")
+            .replace("https://google.com/server5/1:/", "https://bot3.sonic-cloud.online/server5/")
+            .replace("https://google.com/server6/", "https://bot3.sonic-cloud.online/server6/")
+        return if (transformed != url) transformed else ""
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
