@@ -129,10 +129,43 @@ class CineSubzProvider : MainAPI() {
         val resp = app.get(data)
         val doc = resp.document
 
-        val directLink = doc.select("a[href*=http]").attr("href")
-        if (directLink.isNotBlank() && directLink != "#" && !directLink.startsWith(mainUrl)) {
-            loadExtractor(directLink, subtitleCallback, callback)
-            return true
+        val downloadLinks = doc.select("a[href*=/zt-links/], a[href*=/api-]")
+        for (link in downloadLinks) {
+            val href = link.attr("href")
+            if (href.isNotBlank()) {
+                val dlResp = app.get(fixUrl(href))
+                val dlDoc = dlResp.document
+                val dlLinkEl = dlDoc.select("a#link").first() ?: dlDoc.select("div.wait-done a").first() ?: dlDoc.select("a[href*=google.com/server]").first()
+                if (dlLinkEl != null) {
+                    var videoUrl = dlLinkEl.attr("href")
+                    if (videoUrl.isNotBlank()) {
+                        videoUrl = videoUrl
+                            .replace("https://google.com/server11/1:/", "https://bot3.sonic-cloud.online/server1/")
+                            .replace("https://google.com/server12/1:/", "https://bot3.sonic-cloud.online/server1/")
+                            .replace("https://google.com/server13/1:/", "https://bot3.sonic-cloud.online/server1/")
+                            .replace("https://google.com/server21/1:/", "https://bot3.sonic-cloud.online/server2/")
+                            .replace("https://google.com/server22/1:/", "https://bot3.sonic-cloud.online/server2/")
+                            .replace("https://google.com/server23/1:/", "https://bot3.sonic-cloud.online/server2/")
+                            .replace("https://google.com/server3/1:/", "https://bot3.sonic-cloud.online/server3/")
+                            .replace("https://google.com/server4/1:/", "https://bot3.sonic-cloud.online/server4/")
+                            .replace("https://google.com/server5/1:/", "https://bot3.sonic-cloud.online/server5/")
+                            .replace("https://google.com/server6/", "https://bot3.sonic-cloud.online/server6/")
+                        if (videoUrl != dlLinkEl.attr("href")) {
+                            loadExtractor(videoUrl, subtitleCallback, callback)
+                        }
+                    }
+                }
+            }
+        }
+
+        val playerZones = doc.select("li.zetaflix_player_option")
+        for (zone in playerZones) {
+            val post = zone.attr("data-post")
+            val nume = zone.attr("data-nume")
+            val ptype = zone.attr("data-type")
+            if (post.isNotBlank() && nume.isNotBlank()) {
+                loadExtractor("$mainUrl/wp-json/zetaplayer/v2/$ptype/$post", subtitleCallback, callback)
+            }
         }
 
         val iframes = doc.select("iframe[src]")
@@ -140,19 +173,6 @@ class CineSubzProvider : MainAPI() {
             val src = iframe.attr("src")
             if (src.isNotBlank()) {
                 loadExtractor(src, subtitleCallback, callback)
-            }
-        }
-
-        val downloadLinks = doc.select("a[href*=/zt-links/], a[href*=/api-]")
-        for (link in downloadLinks) {
-            val href = link.attr("href")
-            if (href.isNotBlank()) {
-                val dlResp = app.get(fixUrl(href))
-                val dlDoc = dlResp.document
-                val dlLink = dlDoc.select("a[href*=http]").attr("href")
-                if (dlLink.isNotBlank() && dlLink != "#") {
-                    loadExtractor(dlLink, subtitleCallback, callback)
-                }
             }
         }
 
