@@ -27,15 +27,8 @@ class CineSubzProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val result = search(query, 1)
-        return if (result != null) result else emptyList()
-    }
-
-    override suspend fun search(query: String, page: Int): SearchResponseList? {
-        val searchUrl = if (page <= 1) "$mainUrl/?s=$query" else "$mainUrl/page/$page/?s=$query"
-        val doc = app.get(searchUrl).document
-        val results = doc.select("div.flw-item, div.module-item, article.item, div.film-item").mapNotNull { it.toSearchResponse() }
-        return results.toNewSearchResponseList()
+        val doc = app.get("$mainUrl/?s=$query").document
+        return doc.select("div.flw-item, div.module-item, article.item, div.film-item").mapNotNull { it.toSearchResponse() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
