@@ -126,52 +126,64 @@ class CineSubzProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val resp = app.get(data)
-        val doc = resp.document
-
-        val dlBtn = doc.select("a#link").first() ?: doc.select("div.wait-done a").first()
-        if (dlBtn != null) {
-            val rawUrl = dlBtn.attr("href").trim()
-            if (rawUrl.isNotBlank()) {
-                val transformed = transformVideoUrl(rawUrl)
-                if (transformed.isNotBlank()) {
-                    loadExtractor(transformed, subtitleCallback, callback)
-                    return true
-                }
-            }
+        val urls = if (data.startsWith("[") && data.endsWith("]")) {
+            data.removePrefix("[").removeSuffix("]").split(",")
+                .map { it.trim().removeSurrounding("\"") }
+                .filter { it.isNotBlank() }
+        } else {
+            listOf(data)
         }
 
-        val downloadLinks = doc.select("a[href*=/zt-links/], a[href*=/api-]")
-        for (link in downloadLinks) {
-            val href = link.attr("href").trim()
-            if (href.isNotBlank()) {
-                val dlResp = app.get(fixUrl(href))
-                val dlDoc = dlResp.document
-                val dlEl = dlDoc.select("a#link").first() ?: dlDoc.select("div.wait-done a").first()
-                if (dlEl != null) {
-                    val transformed = transformVideoUrl(dlEl.attr("href").trim())
+        for (url in urls) {
+            val trimmedUrl = url.trim()
+            if (trimmedUrl.isBlank() || trimmedUrl == "#") continue
+
+            val resp = app.get(trimmedUrl)
+            val doc = resp.document
+
+            val dlBtn = doc.select("a#link").first() ?: doc.select("div.wait-done a").first()
+            if (dlBtn != null) {
+                val rawUrl = dlBtn.attr("href").trim()
+                if (rawUrl.isNotBlank()) {
+                    val transformed = transformVideoUrl(rawUrl)
                     if (transformed.isNotBlank()) {
                         loadExtractor(transformed, subtitleCallback, callback)
                     }
                 }
             }
-        }
 
-        val playerZones = doc.select("li.zetaflix_player_option")
-        for (zone in playerZones) {
-            val post = zone.attr("data-post")
-            val nume = zone.attr("data-nume")
-            val ptype = zone.attr("data-type")
-            if (post.isNotBlank() && nume.isNotBlank()) {
-                loadExtractor("$mainUrl/wp-json/zetaplayer/v2/$ptype/$post", subtitleCallback, callback)
+            val downloadLinks = doc.select("a[href*=/zt-links/], a[href*=/api-]")
+            for (link in downloadLinks) {
+                val href = link.attr("href").trim()
+                if (href.isNotBlank()) {
+                    val dlResp = app.get(fixUrl(href))
+                    val dlDoc = dlResp.document
+                    val dlEl = dlDoc.select("a#link").first() ?: dlDoc.select("div.wait-done a").first()
+                    if (dlEl != null) {
+                        val transformed = transformVideoUrl(dlEl.attr("href").trim())
+                        if (transformed.isNotBlank()) {
+                            loadExtractor(transformed, subtitleCallback, callback)
+                        }
+                    }
+                }
             }
-        }
 
-        val iframes = doc.select("iframe[src]")
-        for (iframe in iframes) {
-            val src = iframe.attr("src")
-            if (src.isNotBlank()) {
-                loadExtractor(src, subtitleCallback, callback)
+            val playerZones = doc.select("li.zetaflix_player_option")
+            for (zone in playerZones) {
+                val post = zone.attr("data-post")
+                val nume = zone.attr("data-nume")
+                val ptype = zone.attr("data-type")
+                if (post.isNotBlank() && nume.isNotBlank()) {
+                    loadExtractor("$mainUrl/wp-json/zetaplayer/v2/$ptype/$post", subtitleCallback, callback)
+                }
+            }
+
+            val iframes = doc.select("iframe[src]")
+            for (iframe in iframes) {
+                val src = iframe.attr("src")
+                if (src.isNotBlank()) {
+                    loadExtractor(src, subtitleCallback, callback)
+                }
             }
         }
 
