@@ -174,9 +174,10 @@ class CineSubzProvider : MainAPI() {
         val directLink = doc.select("a[href*=http]").attr("href")
         if (directLink.isNotBlank() && directLink != "#" && !directLink.startsWith(mainUrl)) {
             val qual = when {
-                data.contains("1080") || data.contains("4K") || resp.text().contains("1080") -> Qualities.FourK.value
-                data.contains("720") || resp.text().contains("720") -> Qualities.720.value
-                data.contains("480") || resp.text().contains("480") -> Qualities.480.value
+                data.contains("4K") || resp.text().contains("4K") -> Qualities.FourK.value
+                data.contains("1080") || resp.text().contains("1080") -> Qualities.Ultra.value
+                data.contains("720") || resp.text().contains("720") -> Qualities.High.value
+                data.contains("480") || resp.text().contains("480") -> Qualities.Medium.value
                 else -> Qualities.Unknown.value
             }
             callback.invoke(
@@ -220,9 +221,10 @@ class CineSubzProvider : MainAPI() {
             val href = link.attr("href")
             if (href.isNotBlank()) {
                 val qual = when {
-                    link.text().contains("1080") || link.text().contains("4K") -> Qualities.FourK.value
-                    link.text().contains("720") -> Qualities.720.value
-                    link.text().contains("480") -> Qualities.480.value
+                    link.text().contains("4K") -> Qualities.FourK.value
+                    link.text().contains("1080") -> Qualities.Ultra.value
+                    link.text().contains("720") -> Qualities.High.value
+                    link.text().contains("480") -> Qualities.Medium.value
                     else -> Qualities.Unknown.value
                 }
                 val dlResp = app.get(fixUrl(href))
