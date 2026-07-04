@@ -22,13 +22,14 @@ class CineSubzProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page == 1) "$mainUrl${request.data}" else "$mainUrl${request.data}page/$page/"
         val doc = app.get(url).document
-        val items = doc.select("div.flw-item, div.module-item, article.item").mapNotNull { it.toSearchResponse() }
+        val items = doc.select("div.display-item, div.flw-item, div.module-item, article.item").mapNotNull { it.toSearchResponse() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val doc = app.get("$mainUrl/?s=$query").document
-        return doc.select("div.flw-item, div.module-item, article.item, div.film-item").mapNotNull { it.toSearchResponse() }
+        val results = doc.select("div.display-item, div.flw-item, div.module-item, article.item").mapNotNull { it.toSearchResponse() }
+        return results
     }
 
     override suspend fun load(url: String): LoadResponse? {
@@ -90,22 +91,6 @@ class CineSubzProvider : MainAPI() {
                         this.season = seasonMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
                         this.episode = epNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: (episodes.size + 1)
                     })
-                }
-            }
-
-            if (episodes.isEmpty()) {
-                doc.select("div.dropdown-menu a").forEach { seasonEl ->
-                    val seasonNum = Regex("\\d+").find(seasonEl.text())?.value?.toIntOrNull() ?: 1
-                    doc.select("a[href*=/episodes/]").forEach { epEl ->
-                        val epLink = epEl.attr("href")
-                        if (epLink.isNotBlank()) {
-                            episodes.add(newEpisode(fixUrl(epLink)) {
-                                this.name = epEl.text().trim()
-                                this.season = seasonNum
-                                this.episode = episodes.size + 1
-                            })
-                        }
-                    }
                 }
             }
 
@@ -175,38 +160,63 @@ class CineSubzProvider : MainAPI() {
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
-        var linkA: org.jsoup.nodes.Element? = null
-        var href: String? = null
-        if (tagName() == "a") {
-            linkA = this
-            href = attr("href")
+        val isDisplayItem = select("div.item-box").isNotEmpty()
+
+        val href: String
+        var title: String
+        var poster: String
+        var tvType: TvType = TvType.Movie
+
+        if (isDisplayItem) {
+            val linkEl = select("div.item-box > a").first() ?: return null
+            href = linkEl.attr("href")
+            if (href.isBlank()) return null
+
+            title = linkEl.attr("title").trim()
+            if (title.isBlank()) title = select("div.item-desc-title h3").text().trim()
+            if (title.isBlank()) title = select("img.thumb").attr("alt").trim()
+
+            val imgEl = select("img.thumb.mli-thumb").first()
+            poster = if (imgEl != null) {
+                val s = imgEl.attr("src")
+                if (s.isNotBlank()) s else imgEl.attr("data-original")
+            } else ""
+
+            val ptype = linkEl.attr("data-ptype")
+            tvType = if (ptype == "tvshows" || href.contains("/tvshows/")) TvType.TvSeries else TvType.Movie
         } else {
-            linkA = select("a").first()
-            href = linkA?.attr("href")
+            val linkEl = when {
+                tagName() == "a" -> this
+                select("a").isNotEmpty() -> select("a").first()
+                else -> return null
+            }
+            href = linkEl?.attr("href") ?: return null
+            if (href.isBlank()) return null
+
+            title = linkEl.attr("title").ifEmpty { linkEl.select("h3, .title, .film-name").text() }.trim()
+            if (title.isBlank()) title = select("img").attr("alt").trim()
+            if (title.isBlank()) title = linkEl.text().trim()
+
+            val imgEl = select("img").first()
+            poster = if (imgEl != null) {
+                val s = imgEl.attr("src")
+                if (s.isNotBlank()) s else imgEl.attr("data-src").ifEmpty { imgEl.attr("data-original") }
+            } else ""
+
+            val badge = select(".badge, .quality, .badge-quality, .badge-season, .badge-episode").text()
+            val isTv = href.contains("/tvshows/") ||
+                badge.contains("S0", ignoreCase = true) ||
+                badge.contains("Season", ignoreCase = true) ||
+                badge.contains("Complete", ignoreCase = true) ||
+                badge.contains("EP", ignoreCase = true)
+            if (isTv) tvType = TvType.TvSeries
         }
-        if (href.isNullOrBlank()) return null
 
-        val img = select("img").first()
-        val poster = if (img != null) {
-            val src = img.attr("src")
-            if (src.isNotBlank()) src else img.attr("data-src")
-        } else ""
-
-        var title = linkA?.attr("title") ?: img?.attr("alt") ?: ""
-        if (title.isBlank()) title = select("h2, h3, .title, .film-name, .name").text().trim()
-        if (title.isBlank()) title = linkA?.text()?.trim() ?: ""
         if (title.isBlank()) return null
         title = title.replace("| සිංහල උපසිරැසි සමඟ", "").trim()
+        if (title.isBlank()) return null
 
-        val badge = select(".badge, .quality, .badge-quality, .badge-season, .badge-episode").text()
-        val isTv = href.contains("/tvshows/") ||
-            badge.contains("S0", ignoreCase = true) ||
-            badge.contains("Season", ignoreCase = true) ||
-            badge.contains("Complete", ignoreCase = true) ||
-            badge.contains("TV", ignoreCase = true) ||
-            badge.contains("EP", ignoreCase = true)
-
-        return if (isTv) {
+        return if (tvType == TvType.TvSeries) {
             newTvSeriesSearchResponse(title, fixUrl(href), TvType.TvSeries) {
                 this.posterUrl = fixUrl(poster)
             }
