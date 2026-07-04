@@ -26,10 +26,6 @@ class CineSubzProvider : MainAPI() {
         return newHomePageResponse(request.name, items)
     }
 
-    override suspend fun search(query: String): List<SearchResponse> {
-        return search(query, 1)
-    }
-
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         val doc = app.get("$mainUrl/page/$page/?s=$query").document
         val results = doc.select("div.flw-item, div.module-item, article.item").mapNotNull { it.toSearchResponse() }
