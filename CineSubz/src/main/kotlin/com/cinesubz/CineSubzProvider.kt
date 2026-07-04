@@ -27,17 +27,22 @@ class CineSubzProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val doc = app.get("$mainUrl/?s=$query").document
-        return doc.select("div.flw-item, div.module-item, article.item").mapNotNull { it.toSearchResponse() }
+        return search(query, 1)
     }
 
-    override suspend fun load(url: String): LoadResponse {
+    override suspend fun search(query: String, page: Int): SearchResponseList? {
+        val doc = app.get("$mainUrl/page/$page/?s=$query").document
+        val results = doc.select("div.flw-item, div.module-item, article.item").mapNotNull { it.toSearchResponse() }
+        return results.toNewSearchResponseList()
+    }
+
+    override suspend fun load(url: String): LoadResponse? {
         val doc = app.get(url).document
 
         val titleEl = doc.selectFirst("h1, h2.film-title, .title, .film-title")
         val title = titleEl?.text()?.trim()
             ?.replace("| සිංහල උපසිරැසි සමඟ", "")?.trim()
-            ?: throw ErrorLoadingException("Title not found")
+            ?: return null
 
         val poster = doc.select("div.poster img, img.poster, .film-poster img, .poster img").attr("src").ifEmpty {
             doc.select("meta[property=og:image]").attr("content")
@@ -78,56 +83,31 @@ class CineSubzProvider : MainAPI() {
         if (isTv) {
             val episodes = mutableListOf<Episode>()
 
-            val seasonContainers = doc.select("div.season-tabs div.tab-content > div, div.season-list > div, div#seasons > div")
-            if (seasonContainers.isNotEmpty()) {
-                seasonContainers.forEach { container ->
-                    val seasonNum = Regex("""S(\d+)""", RegexOption.IGNORE_CASE).find(
-                        container.id() + container.className() + container.select("h3, .season-title").text()
-                    )?.groupValues?.get(1)?.toIntOrNull() ?: 1
-
-                    container.select("a[href*=/episodes/], li a[href*=/episodes/]").forEach { epEl ->
-                        val epLink = epEl.attr("href")
-                        val epTitle = epEl.select("span.title, .ep-title, .name").text().ifEmpty { epEl.text() }
-                        val epNum = Regex("""(?:EP|Episode|E|ep)[.\s]*(\d+)""", RegexOption.IGNORE_CASE).find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
-                        if (epLink.isNotBlank()) {
-                            episodes.add(newEpisode(fixUrl(epLink)) {
-                                this.name = epTitle.trim()
-                                this.season = seasonNum
-                                this.episode = epNum ?: (episodes.count { it.season == seasonNum } + 1)
-                            })
-                        }
-                    }
-                }
-            } else {
-                doc.select("a[href*=/episodes/]").forEach { epEl ->
-                    val epLink = epEl.attr("href")
-                    val epText = epEl.text()
-                    val seasonMatch = Regex("""S(\d+)""", RegexOption.IGNORE_CASE).find(epLink)
-                    val epNumMatch = Regex("""(?:EP|Episode|E|ep)[.\s]*(\d+)""", RegexOption.IGNORE_CASE).find(epText + " " + epLink)
-                    val season = seasonMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-                    val epNum = epNumMatch?.groupValues?.get(1)?.toIntOrNull()
-                    if (epLink.isNotBlank()) {
-                        episodes.add(newEpisode(fixUrl(epLink)) {
-                            this.name = epText.trim()
-                            this.season = season
-                            this.episode = epNum ?: (episodes.size + 1)
-                        })
-                    }
+            val episodeLinks = doc.select("a[href*=/episodes/]")
+            for (epEl in episodeLinks) {
+                val epLink = epEl.attr("href")
+                val epText = epEl.text()
+                if (epLink.isNotBlank()) {
+                    val seasonMatch = Regex("""[S|s](\d+)""").find(epLink)
+                    val epNumMatch = Regex("""(?:EP|Episode|E|ep)[.\s]*(\d+)""", RegexOption.IGNORE_CASE).find(epText)
+                    episodes.add(newEpisode(fixUrl(epLink)) {
+                        this.name = epText.trim()
+                        this.season = seasonMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                        this.episode = epNumMatch?.groupValues?.get(1)?.toIntOrNull() ?: (episodes.size + 1)
+                    })
                 }
             }
 
             if (episodes.isEmpty()) {
-                val seasonLinks = doc.select("div.dropdown-menu a, ul.dropdown-menu a, div.season-tabs a")
-                seasonLinks.forEach { seasonEl ->
+                doc.select("div.dropdown-menu a").forEach { seasonEl ->
                     val seasonNum = Regex("\\d+").find(seasonEl.text())?.value?.toIntOrNull() ?: 1
                     doc.select("a[href*=/episodes/]").forEach { epEl ->
                         val epLink = epEl.attr("href")
-                        val epText = epEl.text()
                         if (epLink.isNotBlank()) {
                             episodes.add(newEpisode(fixUrl(epLink)) {
-                                this.name = epText.trim()
+                                this.name = epEl.text().trim()
                                 this.season = seasonNum
-                                this.episode = Regex("""(\d+)""").find(epText)?.value?.toIntOrNull() ?: (episodes.size + 1)
+                                this.episode = episodes.size + 1
                             })
                         }
                     }
@@ -139,7 +119,6 @@ class CineSubzProvider : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                this.score = ratingFloat?.let { Rating(it, it) }
                 this.recommendations = recommendations
                 addDuration(duration)
                 addActors(cast)
@@ -153,7 +132,6 @@ class CineSubzProvider : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                this.score = ratingFloat?.let { Rating(it, it) }
                 this.recommendations = recommendations
                 addDuration(duration)
                 addActors(cast)
@@ -173,22 +151,7 @@ class CineSubzProvider : MainAPI() {
 
         val directLink = doc.select("a[href*=http]").attr("href")
         if (directLink.isNotBlank() && directLink != "#" && !directLink.startsWith(mainUrl)) {
-            val qual = when {
-                data.contains("4K") || resp.text.contains("4K") -> 8
-                data.contains("1080") || resp.text.contains("1080") -> 7
-                data.contains("720") || resp.text.contains("720") -> 5
-                data.contains("480") || resp.text.contains("480") -> 4
-                else -> -1
-            }
-            callback.invoke(
-                newExtractorLink(
-                    source = name,
-                    name = "Direct",
-                    url = fixUrl(directLink),
-                    referer = "$mainUrl/",
-                    quality = qual
-                )
-            )
+            loadExtractor(directLink, subtitleCallback, callback)
             return true
         }
 
@@ -200,46 +163,15 @@ class CineSubzProvider : MainAPI() {
             }
         }
 
-        val videoSources = doc.select("video source[src], source[src*=.mp4], source[src*=.m3u8]")
-        for (source in videoSources) {
-            val src = source.attr("src")
-            if (src.isNotBlank()) {
-                callback.invoke(
-                    newExtractorLink(
-                        source = name,
-                        name = "Video",
-                        url = fixUrl(src),
-                        referer = "$mainUrl/",
-                        quality = -1
-                    )
-                )
-            }
-        }
-
         val downloadLinks = doc.select("a[href*=/zt-links/], a[href*=/api-]")
         for (link in downloadLinks) {
             val href = link.attr("href")
             if (href.isNotBlank()) {
-                val qual = when {
-                    link.text().contains("4K") -> 8
-                    link.text().contains("1080") -> 7
-                    link.text().contains("720") -> 5
-                    link.text().contains("480") -> 4
-                    else -> -1
-                }
                 val dlResp = app.get(fixUrl(href))
                 val dlDoc = dlResp.document
                 val dlLink = dlDoc.select("a[href*=http]").attr("href")
                 if (dlLink.isNotBlank() && dlLink != "#") {
-                    callback.invoke(
-                        newExtractorLink(
-                            source = name,
-                            name = "Download ${link.text().trim().take(40)}",
-                            url = fixUrl(dlLink),
-                            referer = "$mainUrl/",
-                            quality = qual
-                        )
-                    )
+                    loadExtractor(dlLink, subtitleCallback, callback)
                 }
             }
         }
@@ -253,13 +185,13 @@ class CineSubzProvider : MainAPI() {
             select("a").isNotEmpty() -> select("a").first()
             else -> return null
         }
-        val href = linkEl?.attr("href")
-        if (href.isNullOrBlank()) return null
+        val href = linkEl?.attr("href") ?: return null
+        if (href.isBlank()) return null
 
         val img = select("img").first()
-        val poster = img?.attr("src")?.ifEmpty { img?.attr("data-src") } ?: ""
-        val title = (img?.attr("alt") ?: select("h2, h3, .title, .name").text().ifEmpty { linkEl?.text() }).trim()
-        if (title.isNullOrBlank()) return null
+        val poster = if (img != null) img.attr("src").ifEmpty { img.attr("data-src") } else ""
+        val title = (img?.attr("alt") ?: select("h2, h3, .title, .name").text().ifEmpty { linkEl.text() }).trim()
+        if (title.isBlank()) return null
 
         val badge = select(".badge, .quality, .badge-quality").text()
         val isTv = href.contains("/tvshows/") ||
