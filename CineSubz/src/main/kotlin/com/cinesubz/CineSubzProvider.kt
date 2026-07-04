@@ -47,9 +47,9 @@ class CineSubzProvider : MainAPI() {
             doc.select("span.year, .meta-year, div.row-line:contains(Year) a, div.row-line:contains(Released) a, a[href*=/release/]").text()
         )?.value?.toIntOrNull()
 
-        val rating = Regex("[\\d.]+").find(
+        val ratingFloat = Regex("[\\d.]+").find(
             doc.select("span.imdb, .imdb-rating, .rating, div.row-line:contains(IMDB)").text()
-        )?.value?.toFloatOrNull()?.let { (it * 10).toInt() }
+        )?.value?.toFloatOrNull()
 
         val duration = doc.select("span.duration, .meta-duration, div.row-line:contains(Duration)").text().trim()
 
@@ -139,7 +139,7 @@ class CineSubzProvider : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                this.rating = rating
+                this.score = ratingFloat?.let { Rating(it, it) }
                 this.recommendations = recommendations
                 addDuration(duration)
                 addActors(cast)
@@ -153,7 +153,7 @@ class CineSubzProvider : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                this.rating = rating
+                this.score = ratingFloat?.let { Rating(it, it) }
                 this.recommendations = recommendations
                 addDuration(duration)
                 addActors(cast)
@@ -174,14 +174,14 @@ class CineSubzProvider : MainAPI() {
         val directLink = doc.select("a[href*=http]").attr("href")
         if (directLink.isNotBlank() && directLink != "#" && !directLink.startsWith(mainUrl)) {
             val qual = when {
-                data.contains("4K") || resp.text().contains("4K") -> Qualities.FourK.value
-                data.contains("1080") || resp.text().contains("1080") -> Qualities.Ultra.value
-                data.contains("720") || resp.text().contains("720") -> Qualities.High.value
-                data.contains("480") || resp.text().contains("480") -> Qualities.Medium.value
-                else -> Qualities.Unknown.value
+                data.contains("4K") || resp.text.contains("4K") -> 8
+                data.contains("1080") || resp.text.contains("1080") -> 7
+                data.contains("720") || resp.text.contains("720") -> 5
+                data.contains("480") || resp.text.contains("480") -> 4
+                else -> -1
             }
             callback.invoke(
-                ExtractorLink(
+                newExtractorLink(
                     source = name,
                     name = "Direct",
                     url = fixUrl(directLink),
@@ -205,12 +205,12 @@ class CineSubzProvider : MainAPI() {
             val src = source.attr("src")
             if (src.isNotBlank()) {
                 callback.invoke(
-                    ExtractorLink(
+                    newExtractorLink(
                         source = name,
                         name = "Video",
                         url = fixUrl(src),
                         referer = "$mainUrl/",
-                        quality = Qualities.Unknown.value
+                        quality = -1
                     )
                 )
             }
@@ -221,18 +221,18 @@ class CineSubzProvider : MainAPI() {
             val href = link.attr("href")
             if (href.isNotBlank()) {
                 val qual = when {
-                    link.text().contains("4K") -> Qualities.FourK.value
-                    link.text().contains("1080") -> Qualities.Ultra.value
-                    link.text().contains("720") -> Qualities.High.value
-                    link.text().contains("480") -> Qualities.Medium.value
-                    else -> Qualities.Unknown.value
+                    link.text().contains("4K") -> 8
+                    link.text().contains("1080") -> 7
+                    link.text().contains("720") -> 5
+                    link.text().contains("480") -> 4
+                    else -> -1
                 }
                 val dlResp = app.get(fixUrl(href))
                 val dlDoc = dlResp.document
                 val dlLink = dlDoc.select("a[href*=http]").attr("href")
                 if (dlLink.isNotBlank() && dlLink != "#") {
                     callback.invoke(
-                        ExtractorLink(
+                        newExtractorLink(
                             source = name,
                             name = "Download ${link.text().trim().take(40)}",
                             url = fixUrl(dlLink),
@@ -253,12 +253,12 @@ class CineSubzProvider : MainAPI() {
             select("a").isNotEmpty() -> select("a").first()
             else -> return null
         }
-        val href = linkEl.attr("href")
+        val href = linkEl?.attr("href")
         if (href.isNullOrBlank()) return null
 
         val img = select("img").first()
         val poster = img?.attr("src")?.ifEmpty { img?.attr("data-src") } ?: ""
-        val title = (img?.attr("alt") ?: select("h2, h3, .title, .name").text().ifEmpty { linkEl.text() }).trim()
+        val title = (img?.attr("alt") ?: select("h2, h3, .title, .name").text().ifEmpty { linkEl?.text() }).trim()
         if (title.isNullOrBlank()) return null
 
         val badge = select(".badge, .quality, .badge-quality").text()
