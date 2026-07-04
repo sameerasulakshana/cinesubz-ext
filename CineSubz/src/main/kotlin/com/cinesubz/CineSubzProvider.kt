@@ -105,7 +105,7 @@ class CineSubzProvider : MainAPI() {
                 if (youtubeTrailer.isNotBlank()) addTrailer(youtubeTrailer)
             }
         } else {
-            val playerLinks = doc.select("a[href*=/zt-links/]").map { fixUrl(it.attr("href")) }
+            val playerLinks = doc.select("a[href*=/zt-links/]").map { fixUrl(it.attr("href").trim()) }
 
             return newMovieLoadResponse(title, url, TvType.Movie, playerLinks) {
                 this.posterUrl = fixUrl(poster)
@@ -131,7 +131,7 @@ class CineSubzProvider : MainAPI() {
 
         val dlBtn = doc.select("a#link").first() ?: doc.select("div.wait-done a").first()
         if (dlBtn != null) {
-            val rawUrl = dlBtn.attr("href")
+            val rawUrl = dlBtn.attr("href").trim()
             if (rawUrl.isNotBlank()) {
                 val transformed = transformVideoUrl(rawUrl)
                 if (transformed.isNotBlank()) {
@@ -143,13 +143,13 @@ class CineSubzProvider : MainAPI() {
 
         val downloadLinks = doc.select("a[href*=/zt-links/], a[href*=/api-]")
         for (link in downloadLinks) {
-            val href = link.attr("href")
+            val href = link.attr("href").trim()
             if (href.isNotBlank()) {
                 val dlResp = app.get(fixUrl(href))
                 val dlDoc = dlResp.document
                 val dlEl = dlDoc.select("a#link").first() ?: dlDoc.select("div.wait-done a").first()
                 if (dlEl != null) {
-                    val transformed = transformVideoUrl(dlEl.attr("href"))
+                    val transformed = transformVideoUrl(dlEl.attr("href").trim())
                     if (transformed.isNotBlank()) {
                         loadExtractor(transformed, subtitleCallback, callback)
                     }
@@ -211,7 +211,7 @@ class CineSubzProvider : MainAPI() {
 
         if (isDisplayItem) {
             val linkEl = select("div.item-box > a").first() ?: return null
-            href = linkEl.attr("href")
+            href = linkEl.attr("href").trim()
             if (href.isBlank()) return null
 
             title = linkEl.attr("title").trim()
@@ -232,7 +232,7 @@ class CineSubzProvider : MainAPI() {
                 select("a").isNotEmpty() -> select("a").first()
                 else -> return null
             }
-            href = linkEl?.attr("href") ?: return null
+            href = linkEl?.attr("href")?.trim() ?: return null
             if (href.isBlank()) return null
 
             title = linkEl.attr("title").ifEmpty { linkEl.select("h3, .title, .film-name").text() }.trim()
