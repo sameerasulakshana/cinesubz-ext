@@ -196,10 +196,10 @@ class CineSubzProvider : MainAPI() {
                     val qName = m.groupValues[1]
                     val qUrl = m.groupValues[2].replace("\\/", "/")
                     val quality = when {
-                        qName.contains("1080") -> Qualities.FHD1080.value
-                        qName.contains("720") -> Qualities.HD720.value
-                        qName.contains("480") -> Qualities.SD480.value
-                        qName.contains("360") -> Qualities.SD360.value
+                        qName.contains("1080") -> 1080
+                        qName.contains("720") -> 720
+                        qName.contains("480") -> 480
+                        qName.contains("360") -> 360
                         else -> Qualities.Unknown.value
                     }
                     callback.invoke(
