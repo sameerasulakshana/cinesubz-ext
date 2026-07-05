@@ -54,7 +54,7 @@ class CineSubzProvider : MainAPI() {
 
         val duration = doc.select("span.duration, .meta-duration, div.row-line:contains(Duration)").text().trim()
 
-        val plot = doc.select("div.description, .plot, .film-description, div.row-line:contains(Overview)").text().trim()
+        val plot = doc.select("div.description, .plot, .film-description, div.details-desc, div.row-line:contains(Overview)").text().trim()
 
         val tags = doc.select("div.genres a, .genre a, div.row-line:contains(Genre) a, div.row-line:contains(Genres) a").map { it.text() }
 
