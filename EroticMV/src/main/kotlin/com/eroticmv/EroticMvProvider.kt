@@ -79,8 +79,14 @@ class EroticMvProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val doc = app.get(data).document
+        val fullHtml = doc.html()
 
-        val videoUrl = doc.select("meta[property=og:video:url]").attr("content")
+        var videoUrl = doc.select("meta[property^=og:video]").attr("content")
+        if (videoUrl.isBlank()) {
+            val jsMatch = Regex("""single_video_url["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]""").find(fullHtml)
+            videoUrl = jsMatch?.groupValues?.get(1) ?: ""
+        }
+
         if (videoUrl.isNotBlank()) {
             if (videoUrl.endsWith(".m3u8")) {
                 callback.invoke(
@@ -98,7 +104,7 @@ class EroticMvProvider : MainAPI() {
             }
         }
 
-        val jsUrl = Regex("""single_video_url["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]""").find(doc.text())
+        val jsUrl = Regex("""single_video_url["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]""").find(fullHtml)
         if (jsUrl != null) {
             val url = jsUrl.groupValues[1]
             if (url != videoUrl && url.isNotBlank()) {
