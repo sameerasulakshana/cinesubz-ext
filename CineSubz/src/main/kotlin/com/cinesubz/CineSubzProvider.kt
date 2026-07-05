@@ -105,9 +105,7 @@ class CineSubzProvider : MainAPI() {
                 if (youtubeTrailer.isNotBlank()) addTrailer(youtubeTrailer)
             }
         } else {
-            val playerLinks = doc.select("a[href*=/zt-links/]").map { fixUrl(it.attr("href").trim()) }
-
-            return newMovieLoadResponse(title, url, TvType.Movie, playerLinks) {
+            return newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = fixUrl(poster)
                 this.year = year
                 this.plot = plot
@@ -126,68 +124,108 @@ class CineSubzProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val urls = if (data.startsWith("[") && data.endsWith("]")) {
-            data.removePrefix("[").removeSuffix("]").split(",")
-                .map { it.trim().removeSurrounding("\"") }
-                .filter { it.isNotBlank() }
-        } else {
-            listOf(data)
+        val doc = app.get(data).document
+
+        val playerOptions = doc.select("li.zetaflix_player_option")
+        if (playerOptions.isEmpty()) {
+            val urls = if (data.startsWith("[") && data.endsWith("]")) {
+                data.removePrefix("[").removeSuffix("]").split(",")
+                    .map { it.trim().removeSurrounding("\"") }
+                    .filter { it.isNotBlank() }
+            } else {
+                listOf(data)
+            }
+            for (url in urls) {
+                if (!url.startsWith("http")) continue
+                try {
+                    val dlDoc = app.get(url).document
+                    val dlBtn = dlDoc.select("a#link").first() ?: dlDoc.select("div.wait-done a").first()
+                    if (dlBtn != null) {
+                        val rawUrl = dlBtn.attr("href").trim()
+                        val transformed = transformVideoUrl(rawUrl)
+                        if (transformed.isNotBlank()) loadExtractor(transformed, subtitleCallback, callback)
+                    }
+                } catch (_: Exception) { }
+            }
+            return true
         }
 
-        for (url in urls) {
-            val trimmedUrl = url.trim()
-            if (trimmedUrl.isBlank() || trimmedUrl == "#") continue
+        for (option in playerOptions) {
+            val post = option.attr("data-post")
+            val nume = option.attr("data-nume")
+            val ptype = option.attr("data-type")
+            if (post.isBlank() || nume.isBlank() || nume == "trailer") continue
+            try {
+                val resp = app.post(
+                    "$mainUrl/wp-admin/admin-ajax.php",
+                    data = mapOf("action" to "zeta_player_ajax", "post" to post, "nume" to nume, "type" to ptype),
+                    headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+                    referer = data
+                )
+                val json = resp.text
+                if (json.isBlank() || json == "0") continue
 
-            val resp = app.get(trimmedUrl)
-            val doc = resp.document
+                val embedUrl = Regex("\"embed_url\"\\s*:\\s*\"([^\"]+)\"").find(json)
+                    ?.groupValues?.get(1)?.replace("\\/", "/") ?: continue
+                val linkType = Regex("\"type\"\\s*:\\s*\"([^\"]+)\"").find(json)
+                    ?.groupValues?.get(1) ?: ""
 
-            val dlBtn = doc.select("a#link").first() ?: doc.select("div.wait-done a").first()
-            if (dlBtn != null) {
-                val rawUrl = dlBtn.attr("href").trim()
-                if (rawUrl.isNotBlank()) {
-                    val transformed = transformVideoUrl(rawUrl)
-                    if (transformed.isNotBlank()) {
-                        loadExtractor(transformed, subtitleCallback, callback)
-                    }
+                if (linkType == "mp4") {
+                    fetchMp4Qualities(embedUrl, nume, subtitleCallback, callback)
+                } else if (linkType == "iframe") {
+                    val iframeSrc = Regex("""src=["']([^"']+)["']""").find(embedUrl)?.groupValues?.get(1)
+                    if (iframeSrc != null) loadExtractor(iframeSrc, subtitleCallback, callback)
+                } else if (embedUrl.startsWith("http")) {
+                    loadExtractor(embedUrl, subtitleCallback, callback)
                 }
-            }
-
-            val downloadLinks = doc.select("a[href*=/zt-links/], a[href*=/api-]")
-            for (link in downloadLinks) {
-                val href = link.attr("href").trim()
-                if (href.isNotBlank()) {
-                    val dlResp = app.get(fixUrl(href))
-                    val dlDoc = dlResp.document
-                    val dlEl = dlDoc.select("a#link").first() ?: dlDoc.select("div.wait-done a").first()
-                    if (dlEl != null) {
-                        val transformed = transformVideoUrl(dlEl.attr("href").trim())
-                        if (transformed.isNotBlank()) {
-                            loadExtractor(transformed, subtitleCallback, callback)
-                        }
-                    }
-                }
-            }
-
-            val playerZones = doc.select("li.zetaflix_player_option")
-            for (zone in playerZones) {
-                val post = zone.attr("data-post")
-                val nume = zone.attr("data-nume")
-                val ptype = zone.attr("data-type")
-                if (post.isNotBlank() && nume.isNotBlank()) {
-                    loadExtractor("$mainUrl/wp-json/zetaplayer/v2/$ptype/$post", subtitleCallback, callback)
-                }
-            }
-
-            val iframes = doc.select("iframe[src]")
-            for (iframe in iframes) {
-                val src = iframe.attr("src")
-                if (src.isNotBlank()) {
-                    loadExtractor(src, subtitleCallback, callback)
-                }
-            }
+            } catch (_: Exception) { }
         }
-
         return true
+    }
+
+    private suspend fun fetchMp4Qualities(
+        embedUrl: String, nume: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        try {
+            val playerHtml = app.get(embedUrl, referer = mainUrl).text
+            val matches = Regex("""html":"([^"]*)","url":"([^"]+\.mp4\?play=true)""").findAll(playerHtml).toList()
+            if (matches.isNotEmpty()) {
+                for (m in matches) {
+                    val qName = m.groupValues[1]
+                    val qUrl = m.groupValues[2].replace("\\/", "/")
+                    val quality = when {
+                        qName.contains("1080") -> Qualities.FHD1080.value
+                        qName.contains("720") -> Qualities.HD720.value
+                        qName.contains("480") -> Qualities.SD480.value
+                        qName.contains("360") -> Qualities.SD360.value
+                        else -> Qualities.Unknown.value
+                    }
+                    callback.invoke(
+                        ExtractorLink(
+                            source = name,
+                            name = "$name $nume $qName",
+                            url = qUrl,
+                            referer = mainUrl,
+                            quality = quality,
+                            type = ExtractorLinkType.VIDEO
+                        )
+                    )
+                }
+            } else {
+                callback.invoke(
+                    ExtractorLink(
+                        source = name,
+                        name = "$name Player $nume",
+                        url = "$embedUrl?play=true",
+                        referer = mainUrl,
+                        quality = Qualities.Unknown.value,
+                        type = ExtractorLinkType.VIDEO
+                    )
+                )
+            }
+        } catch (_: Exception) { }
     }
 
     private fun transformVideoUrl(url: String): String {
