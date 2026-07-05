@@ -35,7 +35,7 @@ class CineSubzProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val doc = app.get(url).document
 
-        val titleEl = doc.selectFirst("h1, h2.film-title, .title, .film-title")
+        val titleEl = doc.selectFirst("h1, h2.film-title, .title, .film-title, .details-title")
         val title = titleEl?.text()?.trim()
             ?.replace("| සිංහල උපසිරැසි සමඟ", "")?.trim()
             ?: return null
