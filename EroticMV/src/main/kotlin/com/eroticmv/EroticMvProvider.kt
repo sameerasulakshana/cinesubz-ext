@@ -82,14 +82,40 @@ class EroticMvProvider : MainAPI() {
 
         val videoUrl = doc.select("meta[property=og:video:url]").attr("content")
         if (videoUrl.isNotBlank()) {
-            loadExtractor(videoUrl, subtitleCallback, callback)
+            if (videoUrl.endsWith(".m3u8")) {
+                callback.invoke(
+                    ExtractorLink(
+                        source = name,
+                        name = name,
+                        url = videoUrl,
+                        referer = mainUrl,
+                        quality = Qualities.Unknown.value,
+                        type = ExtractorLinkType.M3U8
+                    )
+                )
+            } else {
+                loadExtractor(videoUrl, subtitleCallback, callback)
+            }
         }
 
         val jsUrl = Regex("""single_video_url["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]""").find(doc.text())
         if (jsUrl != null) {
             val url = jsUrl.groupValues[1]
-            if (url != videoUrl) {
-                loadExtractor(url, subtitleCallback, callback)
+            if (url != videoUrl && url.isNotBlank()) {
+                if (url.endsWith(".m3u8")) {
+                    callback.invoke(
+                        ExtractorLink(
+                            source = name,
+                            name = name,
+                            url = url,
+                            referer = mainUrl,
+                            quality = Qualities.Unknown.value,
+                            type = ExtractorLinkType.M3U8
+                        )
+                    )
+                } else {
+                    loadExtractor(url, subtitleCallback, callback)
+                }
             }
         }
 
