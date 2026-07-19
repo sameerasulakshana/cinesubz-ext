@@ -1,5 +1,6 @@
 package com.eroticmv
 
+import android.util.Base64
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
@@ -81,11 +82,11 @@ class EroticMvProvider : MainAPI() {
         val doc = app.get(data).document
         val fullHtml = doc.html()
 
-        var videoUrl = doc.select("meta[property^=og:video]").attr("content")
-        if (videoUrl.isBlank()) {
-            val jsMatch = Regex("""single_video_url["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]""").find(fullHtml)
-            videoUrl = jsMatch?.groupValues?.get(1) ?: ""
+        val rawVideoUrl = doc.select("meta[property^=og:video]").attr("content").ifEmpty {
+            Regex("""single_video_url["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]""").find(fullHtml)?.groupValues?.get(1) ?: ""
         }
+
+        val videoUrl = decodeVideoUrl(rawVideoUrl)
 
         if (videoUrl.isNotBlank()) {
             if (videoUrl.endsWith(".m3u8")) {
@@ -104,28 +105,28 @@ class EroticMvProvider : MainAPI() {
             }
         }
 
-        val jsUrl = Regex("""single_video_url["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]""").find(fullHtml)
-        if (jsUrl != null) {
-            val url = jsUrl.groupValues[1]
-            if (url != videoUrl && url.isNotBlank()) {
-                if (url.endsWith(".m3u8")) {
-                    callback.invoke(
-                        ExtractorLink(
-                            source = name,
-                            name = name,
-                            url = url,
-                            referer = mainUrl,
-                            quality = Qualities.Unknown.value,
-                            type = ExtractorLinkType.M3U8
-                        )
-                    )
-                } else {
-                    loadExtractor(url, subtitleCallback, callback)
-                }
-            }
+        return true
+    }
+
+    private fun decodeVideoUrl(url: String): String {
+        if (url.isBlank()) return ""
+
+        if (url.startsWith("https://") && !url.contains("aHR0")) {
+            return url
         }
 
-        return true
+        var core = url
+            .removePrefix("http://")
+            .removePrefix("https://")
+            .removeSuffix(".m3u8")
+
+        return try {
+            val decoded = String(Base64.decode(core, Base64.DEFAULT), Charsets.UTF_8)
+            if (decoded.startsWith("https://") || decoded.startsWith("http://")) decoded
+            else url
+        } catch (_: Exception) {
+            url
+        }
     }
 
     private fun org.jsoup.nodes.Element.toSearchResponse(): SearchResponse? {
