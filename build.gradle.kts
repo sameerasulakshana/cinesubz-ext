@@ -39,7 +39,7 @@ subprojects {
     }
 
     android {
-        namespace = "com.cinesubz"
+        // namespace set per-module in each build.gradle.kts
 
         defaultConfig {
             minSdk = 21

@@ -1,3 +1,7 @@
+android {
+    namespace = "com.eroticmv"
+}
+
 version = 1
 
 cloudstream {
