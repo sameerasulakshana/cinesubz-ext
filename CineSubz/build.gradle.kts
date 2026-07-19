@@ -1,7 +1,3 @@
-android {
-    namespace = "com.cinesubz"
-}
-
 version = 2
 
 cloudstream {
