@@ -1,10 +1,10 @@
 [
     {
-        "iconUrl": "https://www.google.com/s2/favicons?domain=cinesubz.net&sz=%size%",
-        "fileHash": "sha256-14225fd6b9a4461f2d3e05205914a00e9c3d42aed782a3d1ffc0646a394ea17c",
+        "iconUrl": "https://www.google.com/s2/favicons?domain=cinesubz.co&sz=%size%",
+        "fileHash": "sha256-892205cbc4aae073b18c4d6a748aa71a6abbd9f678c75ec80d0b49d7531d614b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sameerasulakshana/cinesubz-ext",
-        "fileSize": 21849,
+        "fileSize": 21857,
         "status": 1,
         "language": "si",
         "authors": [
